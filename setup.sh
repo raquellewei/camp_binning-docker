@@ -3,7 +3,7 @@
 # --- Functions ---
 
 show_welcome() {
-    clear  # Clear the screen for a clean look
+    #clear  # Clear the screen for a clean look
 
     echo ""
     sleep 0.2
@@ -108,7 +108,7 @@ install_database() {
         "checkm1")
             local ARCHIVE="checkm_data_2015_01_16.tar.gz"
             local DB_URL="https://data.ace.uq.edu.au/public/CheckM_databases/$ARCHIVE"
-            # wget -c $DB_URL -P $INSTALL_DIR
+            wget -c $DB_URL -P $INSTALL_DIR
             mkdir -p "$FINAL_DB_PATH"
 	        tar -xzf "$INSTALL_DIR/$ARCHIVE" -C "$FINAL_DB_PATH"
             echo "✅ CheckM1 database installed successfully!"
