@@ -1,73 +1,256 @@
-# MAG Binning
-
-
 ![Version](https://img.shields.io/badge/version-0.11.1-brightgreen)
-
-<!-- [![Documentation Status](https://img.shields.io/readthedocs/camp_binning)](https://camp-documentation.readthedocs.io/en/latest/binning.html)  -->
 
 ## Overview
 
-This module is designed to function as both a standalone MAG binning pipeline as well as a component of the larger CAMP metagenome analysis pipeline. As such, it is both self-contained (ex. instructions included for the setup of a versioned environment, etc.), and seamlessly compatible with other CAMP modules (ex. ingests and spawns standardized input/output config files, etc.). 
+This module is designed to function as both a standalone MAG binning pipeline as well as a component of the larger CAMP metagenome analysis pipeline. As such, it is both self-contained (ex. instructions included for the setup of a versioned environment, etc.), and seamlessly compatible with other CAMP modules (ex. ingests and spawns standardized input/output config files, etc.).
 
-As far as the binning procedure goes, the design philosophy is just to replicate the functionality of [MetaWRAP](https://github.com/bxlab/metaWRAP) (one of the original ensemble methods) with i) better dependency conflict management and ii) improved integration with new binning algorithms. 
+The design philosophy is to replicate the functionality of [MetaWRAP](https://github.com/bxlab/metaWRAP) with better dependency conflict management and improved integration with new binning algorithms.
 
-Currently, the binning algorithms MetaBAT2, CONCOCT, SemiBin, MaxBin2, MetaBinner, and VAMB are wrapped along with the bin refinement tool DAS Tool.
+**Binners included**: MetaBAT2, CONCOCT, SemiBin, MaxBin2, VAMB (and optionally MetaBinner — see below), refined by DAS Tool.
+
+---
 
 ## Installation
 
-### Install `conda`
+### Option 1: Singularity/Apptainer (Recommended — HPC & Linux servers)
 
-If you don't already have `conda` handy, we recommend installing `miniforge`, which is a minimal conda installer that, by default, installs packages from open-source community-driven channels such as `conda-forge`.
-```Bash
-# If you don't already have conda on your system...
-wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+No conda setup required. Pull the image directly from Docker Hub:
+
+```bash
+singularity pull camp-binning.sif docker://raquelle70679/camp-binning:latest
 ```
 
-Run the following command to initialize Conda for your shell. This will configure your shell to recognize conda activate. 
-```Bash
-conda init
+Run the built-in test to verify (no external databases needed — MetaBinner is disabled by default):
+
+```bash
+singularity run --bind ~/CAMP/test_out:/data/test_out camp-binning.sif test
 ```
 
-Restart your terminal or run:
-```Bash
-source ~/.bashrc  # For bash users
-source ~/.zshrc   # For zsh users
+> **Note:** Apptainer is the new name for Singularity (v3.9+). Commands are identical — just replace `singularity` with `apptainer`.
+
+### Option 2: Docker (Cloud VMs & local machines)
+
+```bash
+docker pull raquelle70679/camp-binning:latest
 ```
 
-### Setting up the MAG Binning Module
+Or build from this repo:
 
-1. Clone repo from [Github](<https://github.com/Meta-CAMP/camp_binning>).
-```Bash
-git clone https://github.com/Meta-CAMP/camp_binning
+```bash
+git clone https://github.com/raquellewei/camp_binning-docker
+cd camp_binning-docker
+docker build --platform linux/amd64 -t camp-binning .
 ```
 
-2. Set up the rest of the module interactively by running `setup.sh`. This will install the necessary conda environments (if they have not been installed already) and generate `parameters.yaml` as well as set up the paths in `test_data/samples.csv` for testing. 
-```Bash
-cd camp_binning/
-source setup.sh
+### Option 3: Local conda install
 
-# If you encounter issues where conda activate is not recognized, follow these steps to properly initialize Conda
-conda init
-source ~/.bashrc # or source ~/.zshrc
+See the [original upstream repo](https://github.com/Meta-CAMP/camp_binning) for conda-based local installation instructions using `setup.sh`.
+
+---
+
+## Using the Container
+
+### Input
+
+Prepare a `samples.csv` with absolute paths **as they will appear inside the container**:
+
+```
+sample_name,illumina_ctg,illumina_fwd,illumina_rev
+sample1,/data/input/sample1.fasta,/data/input/sample1_1.fastq.gz,/data/input/sample1_2.fastq.gz
 ```
 
-4. Make sure the installed pipeline works correctly. With 10 threads and a maximum of 40 GB allocated, the test dataset should finish in approximately 40 minutes.
-```Bash
-# Run tests on the included sample dataset
-conda activate camp
-python /path/to/camp_binning/workflow/binning.py test
+The `illumina_ctg` column should contain assembled contigs (e.g. output from the `camp_short-read-assembly` module).
+
+### Output
+
+- `/data/output/binning/final_reports/samples.csv` — output config for the next CAMP module
+- `/data/output/binning/1_metabat2/<sample>/bins/` — MetaBAT2 MAGs
+- `/data/output/binning/2_concoct/<sample>/bins/` — CONCOCT MAGs
+- `/data/output/binning/3_semibin/<sample>/bins/` — SemiBin MAGs
+- `/data/output/binning/4_maxbin2/<sample>/bins/` — MaxBin2 MAGs
+- `/data/output/binning/6_vamb/<sample>/bins/` — VAMB MAGs
+- `/data/output/binning/7_dastool/<sample>/bins/` — DAS Tool refined MAGs
+- `/data/output/binning/final_reports/bin_stats.csv` — per-bin statistics
+- `/data/output/binning/final_reports/bin_summ.csv` — per-sample summary
+
+---
+
+## Singularity Usage
+
+### Running the Pipeline
+
+```bash
+singularity run \
+    --bind /path/to/your/data:/data/input \
+    --bind /path/to/your/output:/data/output \
+    --bind /path/to/your/config:/data/config \
+    camp-binning.sif run \
+    -c 10 \
+    -d /data/output \
+    -s /data/config/samples.csv
 ```
 
-## Using the Module
+### Running on a Slurm Cluster
 
-**Input**: `/path/to/samples.csv` provided by the user.
+```bash
+sbatch << 'EOF'
+#!/bin/bash
+#SBATCH --job-name=camp-binning
+#SBATCH --cpus-per-task=20
+#SBATCH --mem=120G
+#SBATCH --output=camp-binning-%j.log
 
-**Output**: 1) An output config file summarizing the locations of 2) the MAGs generated by each algorithm. 
+singularity run \
+    --bind /path/to/your/data:/data/input \
+    --bind /path/to/your/output:/data/output \
+    --bind /path/to/your/config:/data/config \
+    camp-binning.sif run \
+    -c 20 \
+    -d /data/output \
+    -s /data/config/samples.csv
+EOF
+```
 
-- `/path/to/work/dir/binning/final_reports/samples.csv` for ingestion by the next module (ex. quality-checking)
-- `/path/to/work/dir/binning/*/sample_name/bins/`, where `*` refers to a binning or refinement tool, which contains FastAs of MAGs inferred by that tool
+### Running the Built-in Test
 
-### Module Structure
+The test runs 5 binners (MetaBAT2, CONCOCT, SemiBin, MaxBin2, VAMB) + DAS Tool on a small human gut microbiome dataset. Expected runtime: ~40 minutes with 10 threads, 40 GB RAM.
+
+```bash
+singularity run \
+    --bind ~/CAMP/test_out:/data/test_out \
+    camp-binning.sif test
+```
+
+### Cleanup Intermediate Files
+
+After reviewing your bins, remove large intermediate files (coverage files, fragment FASTAs, etc.):
+
+```bash
+singularity run \
+    --bind /path/to/your/output:/data/output \
+    --bind /path/to/your/config:/data/config \
+    camp-binning.sif cleanup \
+    -d /data/output \
+    -s /data/config/samples.csv
+```
+
+### Debugging
+
+```bash
+singularity shell camp-binning.sif
+conda run -n binning python /opt/camp/workflow/binning.py --help
+```
+
+---
+
+## MetaBinner (Optional — Requires CheckM1 Database)
+
+MetaBinner is pre-installed in the image but **disabled by default** (`use_metabinner: False`) because it requires the CheckM1 database (~1.5 GB) which cannot be bundled in the image.
+
+### Step 1: Download CheckM1 Database
+
+```bash
+mkdir -p ~/CAMP/ref/checkm1
+cd ~/CAMP/ref/checkm1
+wget https://data.ace.uq.edu.au/public/CheckM_databases/checkm_data_2015_01_16.tar.gz
+tar -xzf checkm_data_2015_01_16.tar.gz
+rm checkm_data_2015_01_16.tar.gz
+```
+
+### Step 2: Create a Custom parameters.yaml
+
+```yaml
+conda_prefix: '/opt/conda/envs'
+
+min_contig_len:  2500
+min_metabat_len: 2500
+fragment_size:   2500
+overlap_size:    1000
+min_bin_size:    100000
+test_flags:      ''
+model_environment: 'human_gut'
+
+# Enable MetaBinner
+use_metabinner:  True
+metabinner_env:  '/opt/conda/envs/metabinner'
+checkm1_db:      '/data/ref/checkm1'
+
+dastool_threshold: 0.5
+```
+
+### Step 3: Run with CheckM1 Mounted
+
+```bash
+singularity run \
+    --bind /path/to/your/data:/data/input \
+    --bind /path/to/your/output:/data/output \
+    --bind /path/to/your/config:/data/config \
+    --bind ~/CAMP/ref/checkm1:/data/ref/checkm1 \
+    camp-binning.sif run \
+    -c 10 \
+    -d /data/output \
+    -s /data/config/samples.csv \
+    -p /data/config/parameters.yaml
+```
+
+---
+
+## Docker Usage
+
+### Running the Pipeline
+
+```bash
+docker run \
+    -v /path/to/your/data:/data/input \
+    -v /path/to/your/output:/data/output \
+    -v /path/to/your/config:/data/config \
+    raquelle70679/camp-binning:latest run \
+    -c 10 \
+    -d /data/output \
+    -s /data/config/samples.csv
+```
+
+### Running the Built-in Test
+
+```bash
+docker run --rm \
+    -v ~/CAMP/test_out:/data/test_out \
+    raquelle70679/camp-binning:latest test
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `-c` | Number of CPU cores (default: 1; use 10-20 for real datasets) |
+| `-d` | Working directory inside the container |
+| `-s` | Path to `samples.csv` inside the container |
+| `-p` | Path to a custom `parameters.yaml` (optional) |
+| `-r` | Path to a custom `resources.yaml` (optional) |
+| `--dry_run` | Print workflow commands without executing |
+| `--unlock` | Remove a lock on the working directory after a failed run |
+
+---
+
+## Key Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `min_contig_len` | `2500` | Minimum contig length for binning |
+| `min_metabat_len` | `2500` | Minimum contig length for MetaBAT2 |
+| `fragment_size` | `2500` | Fragment size for CONCOCT |
+| `overlap_size` | `1000` | Overlap size for CONCOCT fragmentation |
+| `min_bin_size` | `100000` | Minimum bin size for VAMB (bytes) |
+| `model_environment` | `'human_gut'` | SemiBin pre-trained model environment |
+| `use_metabinner` | `False` | Enable MetaBinner (requires CheckM1 database) |
+| `dastool_threshold` | `0.5` | DAS Tool score threshold (decreases on retry) |
+
+**SemiBin environment options**: `human_gut`, `dog_gut`, `ocean`, `soil`, `cat_gut`, `human_oral`, `mouse_gut`, `pig_gut`, `built_environment`, `wastewater`, `chicken_caecum`, `global`
+
+---
+
+## Module Structure
+
 ```
 └── workflow
     ├── Snakefile
@@ -76,86 +259,19 @@ python /path/to/camp_binning/workflow/binning.py test
     ├── __init__.py
     └── ext/
         └── scripts/
-```
-- `workflow/binning.py`: Click-based CLI that wraps the `snakemake` and other commands for clean management of parameters, resources, and environment variables.
-- `workflow/Snakefile`: The `snakemake` pipeline. 
-- `workflow/utils.py`: Sample ingestion and work directory setup functions, and other utility functions used in the pipeline and the CLI.
-- `ext/`: External programs, scripts, and small auxiliary files that are not conda-compatible but used in the workflow.
-
-### Running the Workflow
-
-1. Make your own `samples.csv` based on the template in `configs/samples.csv`.
-    - `ingest_samples` in `workflow/utils.py` expects Illumina reads in FastQ (may be gzipped) form 
-    - `samples.csv` requires either absolute paths or paths relative to the directory that the module is being run in
-
-2. Update the relevant parameters in `configs/parameters.yaml`.
-
-3. Update the computational resources available to the pipeline in `configs/resources.yaml`. 
-
-#### Command Line Deployment
-
-To run CAMP on the command line, use the following, where `/path/to/work/dir` is replaced with the absolute path of your chosen working directory, and `/path/to/samples.csv` is replaced with your copy of `samples.csv`. 
-    - The default number of cores available to Snakemake is 1 which is enough for test data, but should probably be adjusted to 10+ for a real dataset.
-    - Relative or absolute paths to the Snakefile and/or the working directory (if you're running elsewhere) are accepted!
-    - The parameters and resource config YAMLs can also be customized.
-```Bash
-conda activate camp
-python /path/to/camp_binning/workflow/binning.py \
-    (-c number_of_cores_allocated) \
-    (-p /path/to/parameters.yaml) \
-    (-r /path/to/resources.yaml) \
-    -d /path/to/work/dir \
-    -s /path/to/samples.csv
+            ├── Fasta_to_Contig2Bin.sh
+            ├── calc_bin_lens.py
+            ├── extract_fasta_bins.py
+            ├── gen_kmer.py
+            ├── merge_cutup_clustering.py
+            └── split_vamb_output.py
 ```
 
-#### Slurm Cluster Deployment
-
-To run CAMP on a job submission cluster (for now, only Slurm is supported), use the following.
-    - `--slurm` is an optional flag that submits all rules in the Snakemake pipeline as `sbatch` jobs. 
-    - In Slurm mode, the `-c` flag refers to the maximum number of `sbatch` jobs submitted in parallel, **not** the pool of cores available to run the jobs. Each job will request the number of cores specified by threads in `configs/resources/slurm.yaml`.
-```Bash
-conda activate camp
-sbatch -J jobname -o jobname.log << "EOF"
-#!/bin/bash
-python /path/to/camp_binning/workflow/binning.py --slurm \
-    (-c max_number_of_parallel_jobs_submitted) \
-    (-p /path/to/parameters.yaml) \
-    (-r /path/to/resources.yaml) \
-    -d /path/to/work/dir \
-    -s /path/to/samples.csv
-EOF
-```
-
-#### Finishing Up
-
-1. Each module includes a built-in Jupyter notebook designed to summarize data efficiently and visually. The following visualization generated by Dataviz.ipynb using the included test dataset. The test dataset is a toy human gut microbiome i.e.: simulated Illumina short reads covering 4 bacterial reference genomes from the Unified Human Gut Genome at 10X coverage per genome.
-
-    Create overview graphs for all of the binned samples comparing them by size (see example below) by following the instructions in the Jupyter notebook:
-```Bash
-conda activate camp
-jupyter notebook &
-```
-<img width="1656" height="1434" alt="binning_1" src="https://github.com/user-attachments/assets/a7487288-97f6-4edf-bfd5-5bf37ee48389" />
-
-
-2. After checking over `/path/to/work/dir/binning/*/sample_name/bins/` and making sure you have bins that seem reasonable given the input dataset, you can delete all intermediate files to save space. 
-```Bash
-python /path/to/camp_binning/workflow/binning.py cleanup \
-    -d /path/to/work/dir \
-    -s /path/to/samples.csv
-```
-
-3. If for some reason the module keeps failing, CAMP can print a script containing all of the remaining commands that can be run manually. 
-```Bash
-python /path/to/camp_binning/workflow/binning.py --dry_run \
-    -d /path/to/work/dir \
-    -s /path/to/samples.csv
-```
+---
 
 ## Credits
 
-- This package was created with [Cookiecutter](https://github.com/cookiecutter/cookiecutter>) as a simplified version of the [project template](https://github.com/audreyr/cookiecutter-pypackage>).
+- This package was created with [Cookiecutter](https://github.com/cookiecutter/cookiecutter) as a simplified version of the [project template](https://github.com/audreyr/cookiecutter-pypackage).
+- Original upstream repo: [Meta-CAMP/camp_binning](https://github.com/Meta-CAMP/camp_binning)
 - Free software: MIT
 - Documentation: https://camp-documentation.readthedocs.io/en/latest/binning.html
-
-

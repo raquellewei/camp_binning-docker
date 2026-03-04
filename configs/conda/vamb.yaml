@@ -1,0 +1,9 @@
+name: vamb
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  # Provides the vamb CLI and the vamb Python package (imported by split_vamb_output.py).
+  # v4+ uses the 'vamb bin default' subcommand syntax used in the Snakefile.
+  - vamb

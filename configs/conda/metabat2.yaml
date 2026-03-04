@@ -1,0 +1,9 @@
+name: metabat2
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  # Provides metabat2 and jgi_summarize_bam_contig_depths.
+  # Also used for MaxBin2 depth calculation (maxbin2_calculate_depth rule).
+  - metabat2

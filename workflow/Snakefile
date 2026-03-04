@@ -14,7 +14,13 @@ dirs = Workflow_Dirs(config['work_dir'], 'binning')
 
 # Load sample names and input files 
 SAMPLES = ingest_samples(config['samples'], dirs.TMP)
-BINNERS = ['1_metabat2', '2_concoct', '3_semibin', '4_maxbin2', '5_metabinner', '6_vamb']
+# MetaBinner requires the CheckM1 database (~1.5 GB, not bundled in the image).
+# Set use_metabinner: True in parameters.yaml and mount the database to
+# /data/ref/checkm1 to enable it. Defaults to False so the built-in test
+# runs without any external databases.
+BINNERS = ['1_metabat2', '2_concoct', '3_semibin', '4_maxbin2', '6_vamb']
+if config.get('use_metabinner', False):
+    BINNERS = ['1_metabat2', '2_concoct', '3_semibin', '4_maxbin2', '5_metabinner', '6_vamb']
 
 
 # Specify the location of any external resources and scripts
@@ -502,7 +508,8 @@ rule dastool_refinement:
             -l $(echo {params.binners} | sed 's/ /,/g') \
             -o {params.prefix} --write_bins --write_unbinned --write_bin_evals \
             --score_threshold $THRESH --threads {threads} \
-            > {log} 2>&1 || echo 'No refined bins made' > {log} 2>&1
+            > {log} 2>&1 || echo 'No refined bins made' >> {log} 2>&1
+        touch {output}
         """
 
 
@@ -517,12 +524,14 @@ rule move_dastool_bins:
     shell:
         """
         mkdir -p {params.out_dir}
-        N=0
-        mv {params.in_dir}/unbinned.fa {params.out_dir}/bin.unbinned.fa
-        for i in $(ls {params.in_dir} | grep .fa); do
-            mv {params.in_dir}/$i {params.out_dir}/bin.${{N}}.fa
-            N=$((N + 1))
-        done
+        if [ -d "{params.in_dir}" ]; then
+            N=0
+            mv {params.in_dir}/unbinned.fa {params.out_dir}/bin.unbinned.fa 2>/dev/null || true
+            for i in $(ls {params.in_dir} | grep .fa 2>/dev/null); do
+                mv {params.in_dir}/$i {params.out_dir}/bin.${{N}}.fa
+                N=$((N + 1))
+            done
+        fi
         touch {output}
         """
 

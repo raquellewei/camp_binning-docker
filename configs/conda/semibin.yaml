@@ -1,0 +1,10 @@
+name: semibin
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  # Provides the SemiBin1 command.
+  # Pre-trained models for --environment options (e.g. human_gut) are
+  # bundled with the package — no database download needed at runtime.
+  - semibin

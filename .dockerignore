@@ -1,0 +1,52 @@
+# Version control
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Test outputs (generated at runtime)
+test_out/
+test_data/test_out/
+test_data/dataviz/
+
+# Generated config files (overwritten by Dockerfile RUN steps)
+test_data/parameters.yaml
+test_data/samples.csv
+
+# Conda environments (installed on host, rebuilt inside container)
+conda_envs/
+
+# Local outputs and logs
+*.log
+*.out
+*.err
+logs/
+.snakemake/
+
+# Jupyter notebooks
+Dataviz.ipynb
+*.ipynb
+
+# Local setup script
+setup.sh
+
+# Documentation
+docs/
+*.rst
+AUTHORS.rst
+
+# IDE / editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Build artifacts
+*.egg-info/
+dist/
+build/

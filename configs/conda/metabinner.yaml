@@ -1,0 +1,13 @@
+name: metabinner
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  # Provides run_metabinner.sh and the MetaBinner Python package.
+  # checkm-genome provides the CheckM1 tool (checkm data setRoot ...).
+  # Note: the CheckM1 *database* (~1.5 GB) is NOT included in this env —
+  # users must download it separately and mount it at /data/ref/checkm1.
+  # See README for download instructions.
+  - metabinner
+  - checkm-genome

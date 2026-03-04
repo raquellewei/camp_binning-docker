@@ -1,0 +1,10 @@
+name: das_tool
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  # Provides DAS_Tool command.
+  # The bioconda package bundles all dependencies:
+  # diamond, prodigal, pullseq, R with required packages (data.table, doMC, etc.)
+  - das_tool
